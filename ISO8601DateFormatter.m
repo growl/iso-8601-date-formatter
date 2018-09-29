@@ -663,7 +663,7 @@ static BOOL is_leap_year(NSUInteger year);
 
 - (NSString *) replaceColonsInString:(NSString *)timeFormat withTimeSeparator:(unichar)timeSep {
 	if (timeSep != ':') {
-		NSMutableString *timeFormatMutable = [[timeFormat mutableCopy] autorelease];
+		NSMutableString *timeFormatMutable = [timeFormat mutableCopy];
 		[timeFormatMutable replaceOccurrencesOfString:@":"
 		                               	   withString:[NSString stringWithCharacters:&timeSep length:1U]
 	                                      	  options:NSBackwardsSearch | NSLiteralSearch
@@ -701,11 +701,8 @@ static BOOL is_leap_year(NSUInteger year);
 	
 
 	if ([dateFormat isEqualToString:lastUsedFormatString] == NO) {
-		[unparsingFormatter release];
 		unparsingFormatter = nil;
-
-		[lastUsedFormatString release];
-		lastUsedFormatString = [dateFormat retain];
+		lastUsedFormatString = dateFormat;
 	}
 
 	if (!unparsingFormatter) {
@@ -713,7 +710,7 @@ static BOOL is_leap_year(NSUInteger year);
 		unparsingFormatter.formatterBehavior = NSDateFormatterBehavior10_4;
 		unparsingFormatter.dateFormat = dateFormat;
 		unparsingFormatter.calendar = unparsingCalendar;
-		unparsingFormatter.locale = [[[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"] autorelease];
+		unparsingFormatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
 	}
 
 	NSTimeZone *_Nonnull const savedCalendarTimeZone = unparsingCalendar.timeZone;
@@ -785,20 +782,20 @@ static BOOL is_leap_year(NSUInteger year);
 		october, november, december
 	};
 
-	NSInteger year = components.year;
+	NSUInteger year = (NSUInteger)components.year;
 	NSInteger week = 0;
 	//The old unparser added 6 to [calendarDate dayOfWeek], which was zero-based; components.weekday is one-based, so we now add only 5.
 	NSInteger dayOfWeek = (components.weekday + 5) % 7;
 	NSInteger dayOfYear = ordinalComponents.day;
 
-	NSInteger prevYear = year - 1;
+	NSUInteger prevYear = year - 1;
 
 	BOOL yearIsLeapYear = is_leap_year(year);
 	BOOL prevYearIsLeapYear = is_leap_year(prevYear);
 
-	NSInteger YY = prevYear % 100;
-	NSInteger C = prevYear - YY;
-	NSInteger G = YY + YY / 4;
+	NSUInteger YY = prevYear % 100;
+	NSUInteger C = prevYear - YY;
+	NSUInteger G = YY + YY / 4;
 	NSInteger Jan1Weekday = (((((C / 100) % 4) * 5) + G) % 7);
 
 	NSInteger weekday = ((dayOfYear + Jan1Weekday) - 1) % 7;
@@ -827,12 +824,10 @@ static BOOL is_leap_year(NSUInteger year);
 		
 		NSString *timeFormat = self.useMillisecondPrecision ? ISO_TIME_FORMAT_MS_PRECISION : ISO_TIME_FORMAT;
 		formatter.dateFormat = [self replaceColonsInString:timeFormat withTimeSeparator:timeSep];
-		formatter.locale = [[[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"] autorelease];
+		formatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
 		formatter.timeZone = timeZone;
 
 		timeString = [formatter stringForObjectValue:date];
-
-		[formatter release];
 
 		//TODO: This is copied from the calendar-date code. It should be isolated in a method.
 		NSInteger offset = [timeZone secondsFromGMTForDate:date];
