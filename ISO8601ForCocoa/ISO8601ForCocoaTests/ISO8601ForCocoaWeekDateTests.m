@@ -50,7 +50,7 @@ expectTimeIntervalSinceReferenceDate:(NSTimeInterval)expectedTimeIntervalSinceRe
 	XCTAssertNotNil(timeZone, @"Parsing a valid ISO 8601 calendar date that specifies a time zone offset should return an NSTimeZone object");
 	XCTAssertEqualWithAccuracy([date timeIntervalSinceReferenceDate], expectedTimeIntervalSinceReferenceDate, 0.0001, @"Date parsed from '%@' (%@) should be %f seconds since the reference date (%@)", dateString, date, expectedTimeIntervalSinceReferenceDate, [NSDate dateWithTimeIntervalSinceReferenceDate:expectedTimeIntervalSinceReferenceDate]);
 	NSInteger secondsFromGMTForDate = [timeZone secondsFromGMTForDate:date];
-	XCTAssertEqual(secondsFromGMTForDate, (NSInteger)expectedSecondsFromGMT, @"Time zone parsed from '%@' should be %f seconds (%f hours) from GMT, not %ld seconds (%f hours)", dateString, expectedSecondsFromGMT, expectedHoursFromGMT, secondsFromGMTForDate, secondsFromGMTForDate / gSecondsPerHour);
+	XCTAssertEqual(secondsFromGMTForDate, (NSInteger)expectedSecondsFromGMT, @"Time zone parsed from '%@' should be %f seconds (%f hours) from GMT, not %ld seconds (%f hours)", dateString, expectedSecondsFromGMT, expectedHoursFromGMT, (long)secondsFromGMTForDate, secondsFromGMTForDate / gSecondsPerHour);
 }
 
 - (void) attemptToUnparseDateWithTimeIntervalSinceReferenceDate:(NSTimeInterval)timeIntervalSinceReferenceDate
@@ -246,6 +246,19 @@ expectTimeZoneWithHoursFromGMT:expectedHoursFromGMT];
 
 	NSString *expectedString = @"2007-W01-01";
 	NSTimeInterval timeIntervalSinceReferenceDate = 189302400.0;
+	NSDate *date = [NSDate dateWithTimeIntervalSinceReferenceDate:timeIntervalSinceReferenceDate];
+	NSString *string = [_iso8601DateFormatter stringFromDate:date];
+	XCTAssertEqualObjects(string, expectedString, @"Generated wrong week date string for %@ (%f)", date, timeIntervalSinceReferenceDate);
+}
+
+// <rdar://problem/23248311>: As of 10.10.4, NSDateFormatter with format @"YYYY-'W'ww-FF" generates 2016-W01-05 for this date.
+- (void) testUnparsingDateWithoutTimeAtEndOf2015 {
+	_iso8601DateFormatter.format = ISO8601DateFormatWeek;
+	_iso8601DateFormatter.includeTime = false;
+	_iso8601DateFormatter.defaultTimeZone = [NSTimeZone timeZoneWithName:@"UTC"];
+
+	NSString *expectedString = @"2015-W53-04";
+	NSTimeInterval timeIntervalSinceReferenceDate = 473241600.000000;
 	NSDate *date = [NSDate dateWithTimeIntervalSinceReferenceDate:timeIntervalSinceReferenceDate];
 	NSString *string = [_iso8601DateFormatter stringFromDate:date];
 	XCTAssertEqualObjects(string, expectedString, @"Generated wrong week date string for %@ (%f)", date, timeIntervalSinceReferenceDate);

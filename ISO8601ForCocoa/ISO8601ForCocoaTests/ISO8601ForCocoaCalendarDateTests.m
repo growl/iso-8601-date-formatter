@@ -53,7 +53,7 @@ expectTimeIntervalSinceReferenceDate:(NSTimeInterval)expectedTimeIntervalSinceRe
 	XCTAssertNotNil(timeZone, @"Parsing a valid ISO 8601 calendar date that specifies a time zone offset should return an NSTimeZone object");
 	XCTAssertEqualWithAccuracy([date timeIntervalSinceReferenceDate], expectedTimeIntervalSinceReferenceDate, 0.0001, @"Date parsed from '%@' should be %f seconds since the reference date", dateString, expectedTimeIntervalSinceReferenceDate);
 	NSInteger secondsFromGMTForDate = [timeZone secondsFromGMTForDate:date];
-	XCTAssertEqual(secondsFromGMTForDate, (NSInteger)expectedSecondsFromGMT, @"Time zone parsed from '%@' should be %f seconds (%f hours) from GMT, not %ld seconds (%f hours)", dateString, expectedSecondsFromGMT, expectedHoursFromGMT, secondsFromGMTForDate, secondsFromGMTForDate / gSecondsPerHour);
+	XCTAssertEqual(secondsFromGMTForDate, (NSInteger)expectedSecondsFromGMT, @"Time zone parsed from '%@' should be %f seconds (%f hours) from GMT, not %ld seconds (%f hours)", dateString, expectedSecondsFromGMT, expectedHoursFromGMT, (long)secondsFromGMTForDate, secondsFromGMTForDate / gSecondsPerHour);
 }
 
 - (void) attemptToUnparseDateWithTimeIntervalSinceReferenceDate:(NSTimeInterval)timeIntervalSinceReferenceDate
@@ -306,7 +306,7 @@ expectTimeZoneWithHoursFromGMT:expectedHoursFromGMT];
 - (void) testUnparsingDatesWithoutTime {
 	_iso8601DateFormatter.includeTime = false;
 
-	NSCalendar *calendar = [[NSCalendar alloc] initWithCalendarIdentifier:NSGregorianCalendar];
+    NSCalendar *calendar = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
 	XCTAssertNotNil(calendar, @"Couldn't create Gregorian calendar with which to set up date-unparsing tests");
 	NSLocale *locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
 	XCTAssertNotNil(calendar, @"Couldn't create C/POSIX locale with which to set up date-unparsing tests");
@@ -319,9 +319,9 @@ expectTimeZoneWithHoursFromGMT:expectedHoursFromGMT];
 		components.year = year;
 
 		NSDate *date = [calendar dateFromComponents:components];
-		NSString *expectedString = [NSString stringWithFormat:@"%04ld-%02ld-%02ld", components.year, components.month, components.day];
+		NSString *expectedString = [NSString stringWithFormat:@"%04ld-%02ld-%02ld", (long)components.year, (long)components.month, (long)components.day];
 		NSString *string = [_iso8601DateFormatter stringFromDate:date];
-		XCTAssertEqualObjects(string, expectedString, @"Got surprising string for January 1, %lu", year);
+		XCTAssertEqualObjects(string, expectedString, @"Got surprising string for January 1, %lu", (unsigned long)year);
 	}
 }
 
@@ -377,6 +377,22 @@ expectTimeZoneWithHoursFromGMT:expectedHoursFromGMT];
 	XCTAssertNotNil(date, @"1 PM UTC on October 9th, 2013 should not be nil");
 }
 
+//https://github.com/boredzo/iso-8601-date-formatter/issues/63
+- (void) testParsingDecember1st2014 {
+	NSString *_Nonnull const str = @"2014-12-01";
+	ISO8601DateFormatter *_Nonnull const formatter = [[ISO8601DateFormatter alloc] init];
+	formatter.defaultTimeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
+
+	NSDateComponents *_Nonnull const components = [formatter dateComponentsFromString:str];
+	components.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
+	NSDate *_Nonnull const dateCreatedHereFromComponents = [[NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian] dateFromComponents:components];
+	XCTAssertEqual((int)dateCreatedHereFromComponents.timeIntervalSinceReferenceDate, 439084800, @"Expected @\"%@\" to be midnight on 2014-12-01 in UTC, not %@", str, dateCreatedHereFromComponents);
+
+	NSDate *_Nonnull const date = [formatter dateFromString:str];
+	XCTAssertNotNil(date, @"December 1st, 2014 should not be nil");
+	XCTAssertEqual((int)date.timeIntervalSinceReferenceDate, 439084800, @"Expected @\"%@\" to be midnight on 2014-12-01 in UTC, not %@", str, date);
+}
+
 // https://github.com/boredzo/iso-8601-date-formatter/issues/36
 - (void) testParsingFractionaryTimeZone
 {
@@ -403,12 +419,18 @@ expectTimeZoneWithHoursFromGMT:expectedHoursFromGMT];
 }
 
 - (void) testParseNilIntoDateComponents {
-	NSDateComponents *components = [_iso8601DateFormatter dateComponentsFromString:nil];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnonnull"
+	NSDateComponents *_Nullable const components = [_iso8601DateFormatter dateComponentsFromString:nil];
+#pragma clang diagnostic pop
 	XCTAssertNil(components, @"dateComponentsFromString:nil should have returned nil, but returned %@", components);
 }
 
 - (void) testParseNilIntoDate {
-	NSDate *date = [_iso8601DateFormatter dateFromString:nil];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnonnull"
+	NSDate *_Nullable const date = [_iso8601DateFormatter dateFromString:nil];
+#pragma clang diagnostic pop
 	XCTAssertNil(date, @"dateFromString:nil returned should have returned nil, but returned %@", date);
 }
 
@@ -566,6 +588,100 @@ expectTimeZoneWithHoursFromGMT:expectedHoursFromGMT];
 	XCTAssertNil(date, @"Date from substring of '%@' should be nil, not %@ (%f)", string, date, date.timeIntervalSinceReferenceDate);
 	XCTAssertNil(timeZone, @"Time zone from substring of '%@' should be nil, not %@", string, timeZone);
 	ISO8601AssertEqualRanges(range, expectedRange, @"Range of date from substring of '%@' should be %@ ('%@'), not %@ ('%@')", string, NSStringFromRange(expectedRange), [string substringWithRange:expectedRange], NSStringFromRange(range), [string substringWithRange:range]);
+}
+
+// https://github.com/boredzo/iso-8601-date-formatter/issues/29
+- (void) testParsingDoesNotMakeStuffUp {
+	ISO8601DateFormatter *_Nonnull const formatter = [[ISO8601DateFormatter alloc] init];
+
+	NSString *_Nonnull const dateOnlyString = @"2016-04-01";
+	NSDateComponents *_Nullable const dateOnlyComponents = [formatter dateComponentsFromString:dateOnlyString];
+	XCTAssertNil(dateOnlyComponents.timeZone);
+	XCTAssertEqual(dateOnlyComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyComponents.hour, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyComponents.second, NSUndefinedDateComponent);
+
+	//Note: ISO 8601 defines -AA-BB as year AA (of implied century), month BB. For implied year, explicit month and day, we want --AA-BB.
+	NSString *_Nonnull const dateOnlyNoYearString = @"--04-01";
+	NSDateComponents *_Nullable const dateOnlyNoYearComponents = [formatter dateComponentsFromString:dateOnlyNoYearString];
+	XCTAssertNil(dateOnlyNoYearComponents.timeZone);
+	XCTAssertEqual(dateOnlyNoYearComponents.year, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearComponents.hour, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearComponents.second, NSUndefinedDateComponent);
+
+	NSString *_Nonnull const dateOnlyWeekDateString = @"2016-W04-01";
+	NSDateComponents *_Nullable const dateOnlyWeekDateComponents = [formatter dateComponentsFromString:dateOnlyWeekDateString];
+	XCTAssertNil(dateOnlyWeekDateComponents.timeZone);
+	XCTAssertEqual(dateOnlyWeekDateComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyWeekDateComponents.hour, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyWeekDateComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyWeekDateComponents.second, NSUndefinedDateComponent);
+
+	NSString *_Nonnull const dateOnlyNoYearWeekDateString = @"-W04-01";
+	NSDateComponents *_Nullable const dateOnlyNoYearWeekDateComponents = [formatter dateComponentsFromString:dateOnlyNoYearWeekDateString];
+	XCTAssertNil(dateOnlyNoYearWeekDateComponents.timeZone);
+	XCTAssertEqual(dateOnlyNoYearWeekDateComponents.year, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearWeekDateComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearWeekDateComponents.hour, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearWeekDateComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearWeekDateComponents.second, NSUndefinedDateComponent);
+	
+	NSString *_Nonnull const dateOnlyNoYearOrMonthString = @"---01";
+	NSDateComponents *_Nullable const dateOnlyNoYearOrMonthComponents = [formatter dateComponentsFromString:dateOnlyNoYearOrMonthString];
+	XCTAssertNil(dateOnlyNoYearOrMonthComponents.timeZone);
+	XCTAssertEqual(dateOnlyNoYearOrMonthComponents.year, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrMonthComponents.month, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrMonthComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrMonthComponents.hour, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrMonthComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrMonthComponents.second, NSUndefinedDateComponent);
+
+	NSString *_Nonnull const dateOnlyOrdinalString = @"2016-012";
+	NSDateComponents *_Nullable const dateOnlyOrdinalComponents = [formatter dateComponentsFromString:dateOnlyOrdinalString];
+	XCTAssertNil(dateOnlyOrdinalComponents.timeZone);
+	XCTAssertEqual(dateOnlyOrdinalComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyOrdinalComponents.hour, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyOrdinalComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyOrdinalComponents.second, NSUndefinedDateComponent);
+
+	NSString *_Nonnull const dateOnlyNoYearOrdinalString = @"-012";
+	NSDateComponents *_Nullable const dateOnlyNoYearOrdinalComponents = [formatter dateComponentsFromString:dateOnlyNoYearOrdinalString];
+	XCTAssertNil(dateOnlyNoYearOrdinalComponents.timeZone);
+	XCTAssertEqual(dateOnlyNoYearOrdinalComponents.year, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrdinalComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrdinalComponents.hour, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrdinalComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(dateOnlyNoYearOrdinalComponents.second, NSUndefinedDateComponent);
+
+	NSString *_Nonnull const timeOnlyString = @"T12:34:56";
+	NSDateComponents *_Nullable const timeOnlyComponents = [formatter dateComponentsFromString:timeOnlyString];
+	XCTAssertNil(timeOnlyComponents.timeZone);
+	XCTAssertEqual(timeOnlyComponents.year, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyComponents.month, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyComponents.day, NSUndefinedDateComponent);
+
+	NSString *_Nonnull const timeOnlyNoSecondsString = @"T12:34";
+	NSDateComponents *_Nullable const timeOnlyNoSecondsComponents = [formatter dateComponentsFromString:timeOnlyNoSecondsString];
+	XCTAssertNil(timeOnlyNoSecondsComponents.timeZone);
+	XCTAssertEqual(timeOnlyNoSecondsComponents.year, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsComponents.month, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsComponents.day, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsComponents.second, NSUndefinedDateComponent);
+
+	NSString *_Nonnull const timeOnlyNoSecondsOrMinutesString = @"T12";
+	NSDateComponents *_Nullable const timeOnlyNoSecondsOrMinutesComponents = [formatter dateComponentsFromString:timeOnlyNoSecondsOrMinutesString];
+	XCTAssertNil(timeOnlyNoSecondsOrMinutesComponents.timeZone);
+	XCTAssertEqual(timeOnlyNoSecondsOrMinutesComponents.year, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsOrMinutesComponents.month, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsOrMinutesComponents.weekOfYear, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsOrMinutesComponents.day, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsOrMinutesComponents.minute, NSUndefinedDateComponent);
+	XCTAssertEqual(timeOnlyNoSecondsOrMinutesComponents.second, NSUndefinedDateComponent);
 }
 
 @end
